@@ -1,0 +1,11 @@
+h1{
+    display: flex;
+    align-items: center;
+    text-align: center;
+    justify-content: center;
+}
+#iziet{
+    width: 60px;
+    height: 80px;
+    background-color: azure;
+}
