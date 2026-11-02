@@ -7,12 +7,49 @@
     <link rel="stylesheet" href="home.css">
 </head>
 <body>
-    <div class="block">
-        <h1>Kas tu esi?</h1>
-        <button class="btn" onclick="admin()">Admins</button>
-        <button class="btn" onclick="sorter()">Sorter</button>
-        <button class="btn" onclick="worker()">Darbinieks</button>
-    </div>
+    <main id="logreg" class="auth-layout">
+        <div class="page-intro">
+            <p>Plāno uzdevumus un strādā kopā projektos.</p>
+        </div>
+
+        <section class="auth-box" aria-labelledby="loginHeading">
+            <h2 id="loginHeading">Ielogošanās</h2>
+            <form id="loginForm" class="auth-form" autocomplete="on">
+                <label for="LoginName">Lietotājvārds</label>
+                <input id="LoginName" name="login" type="text" placeholder="Tavs lietotājvārds" autocomplete="username" required maxlength="50">
+
+                <label for="LoginPass">Parole</label>
+                <div class="password-row">
+                    <input id="LoginPass" name="password" type="password" placeholder="Tava parole" autocomplete="current-password" required>
+                    <button class="show-btn" type="button" data-password-target="LoginPass" aria-label="Parādīt paroli">👁</button>
+                </div>
+
+                <button class="pogas" type="submit">Ielogoties</button>
+                <p id="loginmessage" class="message" role="status" aria-live="polite"></p>
+            </form>
+        </section>
+
+        <section class="auth-box" aria-labelledby="registerHeading">
+            <h2 id="registerHeading">Konta izveide</h2>
+            <form id="registerForm" class="auth-form" autocomplete="on">
+                <label for="RegLogin">Lietotājvārds</label>
+                <input id="RegLogin" name="login" type="text" placeholder="Izvēlies lietotājvārdu" autocomplete="username" required minlength="3" maxlength="50">
+
+                <label for="RegEmail">E-pasts</label>
+                <input id="RegEmail" name="email" type="email" placeholder="vards@email.com" autocomplete="email" required maxlength="254">
+
+                <label for="RegPass">Parole</label>
+                <div class="password-row">
+                    <input id="RegPass" name="password" type="password" placeholder="Vismaz 8 simboli" autocomplete="new-password" required minlength="8">
+                    <button class="show-btn" type="button" data-password-target="RegPass" aria-label="Parādīt paroli">👁</button>
+                </div>
+
+                <button class="pogas" type="submit">Reģistrēties</button>
+                <p id="regmessage" class="message" role="status" aria-live="polite"></p>
+            </form>
+        </section>
+        <p class="auth-footnote">Tavi uzdevumi tiek saglabāti serverī.</p>
+    </main>
     <script src="home.js"></script>
 </body>
 </html>

@@ -68,3 +68,15 @@ body {
     width: 25px;
     text-align: center;
 }
+
+@media (max-width: 1000px){
+    .all{
+        position: relative;
+        left: 130px;
+        width: 100px;
+    }
+    .sidebar{
+        width: 150px;
+    }
+    
+}
