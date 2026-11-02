@@ -1,15 +1,21 @@
-h1{
-    display: flex;
-    align-items: center;
-    text-align: center;
-    justify-content: center;
-}
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
 
+.all{
+    display: flex;
+    text-align: center;
+    justify-content: center;
+
+    position: relative;
+    left: 15%;
+
+    /* background-color: red;  */
+    width: 85%;
+    height: 919px;
+}
 html, body {
     width: 100%;
     min-height: 100%;
@@ -24,7 +30,7 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 300px;
+    width: 15%;
     height: 100vh;
     background-color: #28629b;
     color: white;

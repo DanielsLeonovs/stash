@@ -2,10 +2,7 @@ const role = localStorage.getItem("role");
 
     if (!role) {
         window.location.href = "home.html";
-    } else {
-        document.getElementById("welcome").textContent =
-            "Tu esi pieslēdzies kā: " + role;
-    }
+    } 
 
 function admin() {
     localStorage.setItem("role", "admin");
@@ -76,3 +73,6 @@ document.addEventListener("DOMContentLoaded", function () {
         menu.appendChild(link);
     });
 });
+
+
+
