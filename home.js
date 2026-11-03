@@ -23,6 +23,7 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
         showMessage("loginmessage", result.message);
         return;
     }
+    
     localStorage.setItem("currentUser", result.user.login);
     localStorage.setItem("role", result.user.role);
     window.location.href = "stash.html";

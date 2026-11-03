@@ -70,7 +70,7 @@ body {
 
 @media (max-width: 1000px){
     *{
-        font-size: 12px;
+        font-size: 18px;
     }
     .all{
         position: relative;
