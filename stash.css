@@ -12,7 +12,6 @@
     position: relative;
     left: 15%;
 
-    /* background-color: red;  */
     width: 85%;
     height: 919px;
 }
@@ -34,7 +33,7 @@ body {
     height: 100vh;
     background-color: #28629b;
     color: white;
-    padding: 20px;
+    padding: 10px;
     overflow-y: auto;
 }
 
@@ -70,13 +69,15 @@ body {
 }
 
 @media (max-width: 1000px){
+    *{
+        font-size: 12px;
+    }
     .all{
         position: relative;
         left: 130px;
         width: 100px;
     }
     .sidebar{
-        width: 150px;
+        width: 140px;
     }
-    
 }

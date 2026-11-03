@@ -18,18 +18,14 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     const login = document.getElementById("LoginName").value.trim();
     const password = document.getElementById("LoginPass").value;
 
-    try {
-        const result = await api("login", { login, password });
-        if (!result.success) {
-            showMessage("loginmessage", result.message);
-            return;
-        }
-        localStorage.setItem("currentUser", result.user.login);
-        localStorage.setItem("role", result.user.role);
-        window.location.href = "stash.html";
-    } catch (error) {
-        showMessage("loginmessage", "Neizdevās savienoties ar serveri!");
+    const result = await api("login", { login, password });
+    if (!result.success) {
+        showMessage("loginmessage", result.message);
+        return;
     }
+    localStorage.setItem("currentUser", result.user.login);
+    localStorage.setItem("role", result.user.role);
+    window.location.href = "stash.html";
 });
 
 document.getElementById("registerForm").addEventListener("submit", async (e) => {
@@ -38,14 +34,10 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
     const password = document.getElementById("RegPass").value;
     const role = document.getElementById("RegRole").value;
 
-    try {
-        const result = await api("register", { login, password, role });
-        showMessage("regmessage", result.message, !result.success);
-        if (result.success) {
-            e.target.reset();
-            document.getElementById("LoginName").value = login;
-        }
-    } catch (error) {
-        showMessage("regmessage", "Neizdevās savienoties ar serveri!");
+    const result = await api("register", { login, password, role });
+    showMessage("regmessage", result.message, !result.success);
+    if (result.success) {
+        e.target.reset();
+        document.getElementById("LoginName").value = login;
     }
 });
