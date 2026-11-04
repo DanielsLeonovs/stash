@@ -4,25 +4,22 @@
     box-sizing: border-box;
 }
 
-.all{
-    display: flex;
-    text-align: center;
-    justify-content: center;
-
-    position: relative;
-    left: 15%;
-
-    width: 85%;
-    height: 919px;
-}
 html, body {
     width: 100%;
     min-height: 100%;
 }
 
 body {
-    margin: 0;
     font-family: Arial, sans-serif;
+}
+
+.all {
+    display: block;
+    text-align: left;
+    margin-left: 15%;
+    width: 85%;
+    min-height: 100vh;
+    padding: 20px;
 }
 
 .sidebar {
@@ -68,47 +65,97 @@ body {
     text-align: center;
 }
 
-@media (max-width: 1000px){
-    *{
-        font-size: 18px;
+.box {
+    margin: 15px 0;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+input, select, button {
+    padding: 6px 10px;
+    font-family: inherit;
+}
+
+button {
+    background: #28629b;
+    color: white;
+    border: 0;
+    cursor: pointer;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 10px;
+}
+
+th, td {
+    border: 1px solid #ccc;
+    padding: 6px;
+    text-align: left;
+}
+
+@media (max-width: 768px) {
+
+    .all {
+        margin-left: 0;
+        width: 100%;
+        padding: 12px;
+        padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
     }
-    .all{
-        position: relative;
-        left: 130px;
-        width: 100px;
+
+    .sidebar {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: auto;
+        padding: 0;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        overflow: visible;
+        z-index: 1000;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.25);
     }
-    .sidebar{
-        width: 140px;
+
+    .sidebar h1,
+    .sidebar hr {
+        display: none;
     }
-}
-.all { 
-    display: block; 
-    text-align: left; 
-    height: auto; 
-    padding: 20px; 
-}
-.box { 
-    margin: 15px 0; 
-    display: flex; 
-    gap: 8px; 
-    flex-wrap: wrap; 
-}
-input, select, button { 
-    padding: 6px 10px; 
-}
-button { 
-    background: #28629b; 
-    color: white; 
-    border: 0; 
-    cursor: pointer; 
-}
-table { 
-    border-collapse: collapse; 
-    width: 100%; 
-    margin-top: 10px; 
-}
-th, td { 
-    border: 1px solid #ccc; 
-    padding: 6px; 
-    text-align: left; 
+
+    #menu {
+        display: flex;
+        justify-content: space-around;
+        align-items: stretch;
+    }
+
+    #menu a {
+        flex: 1;
+        flex-direction: column;
+        justify-content: center;
+        gap: 2px;
+        font-size: 11px;
+        padding: 8px 2px;
+        text-align: center;
+    }
+
+    #menu span {
+        width: auto;
+        font-size: 20px;
+        line-height: 1;
+    }
+
+    .box input,
+    .box select,
+    .box button {
+        flex: 1 1 100%;
+        font-size: 16px; 
+        padding: 10px;
+    }
+
+    table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
 }
