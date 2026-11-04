@@ -1,0 +1,17 @@
+[
+    {
+        "login": "admin",
+        "password": "$2y$10$c4H\/Fxu0nAvpAZclePHvLuigYSneydk312duqsv4ka9piPaVwvk2q",
+        "role": "admin"
+    },
+    {
+        "login": "1",
+        "password": "1",
+        "role": "worker"
+    },
+    {
+        "login": "2",
+        "password": "2",
+        "role": "sorter"
+    }
+]

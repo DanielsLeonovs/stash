@@ -1,73 +1,34 @@
-const role = localStorage.getItem("role");
+// Loma un CSRF token tiek ņemti no servera sesijas (nevis no localStorage)
+let role = null, csrf = null;
 
-    if (!role) {
-        window.location.href = "home.html";
-    } 
+const menus = {
+    admin: [["⌂", "Sākums", "#home"], ["▤", "Preces", "#products"], ["♙", "Lietotāji", "#users"], ["▤", "Pārskats", "#report"]],
+    worker: [["⌂", "Sākums", "#home"], ["▤", "Preces", "#products"], ["🚚", "Pasūtījumi", "#orders"], ["▤", "Pārskats", "#report"]],
+    sorter: [["⌂", "Sākums", "#home"], ["▤", "Preces", "#products"], ["▤", "Izvietot preces", "#place"], ["▤", "Pārskats", "#report"]]
+};
 
-function admin() {
-    localStorage.setItem("role", "admin");
-    window.location.href = "stash.html";
-}
+const ready = (async () => {
+    const r = await (await fetch("api.php?action=me")).json();
+    if (!r.success) { window.location.href = "home.html"; return; }
+    role = r.role;
+    csrf = r.csrf;
 
-function worker() {
-    localStorage.setItem("role", "worker");
-    window.location.href = "stash.html";
-}
-
-function sorter() {
-    localStorage.setItem("role", "sorter");
-    window.location.href = "stash.html";
-}
-
-document.addEventListener("DOMContentLoaded", function () {
-    const role = localStorage.getItem("role");
     const menu = document.getElementById("menu");
-
-    if (!menu) return;
-
-    let buttons = [];
-
-    if (role === "admin") {
-        buttons = [
-            ["⌂", "Sākums", "stash.html#home"],
-            ["▤", "Preces", "stash.html#products"],
-            ["♙", "Lietotāji", "stash.html#users"],
-            ["▤", "Pārskats", "stash.html#report"],
-            ["⇥", "Iziet", "logout"]
-        ];
-    } else if (role === "worker") {
-        buttons = [
-            ["⌂", "Sākums", "stash.html#home"],
-            ["▤", "Preces", "stash.html#products"],
-            ["🚚", "Pasūtījumi", "stash.html#orders"],
-            ["▤", "Pārskats", "stash.html#report"],
-            ["⇥", "Iziet", "logout"]
-        ];
-    } else if (role === "sorter") {
-        buttons = [
-            ["⌂", "Sākums", "stash.html#home"],
-            ["▤", "Preces", "stash.html#products"],
-            ["▤", "Izvietot preces", "stash.html#place"],
-            ["▤", "Pārskats", "stash.html#report"],
-            ["⇥", "Iziet", "logout"]
-        ];
-    }
-
     menu.innerHTML = "";
-
-    buttons.forEach(function (button) {
-        const link = document.createElement("a");
-        link.href = button[2] === "logout" ? "#" : button[2];
-        link.innerHTML = `<span>${button[0]}</span>${button[1]}`;
-
-        if (button[2] === "logout") {
-            link.addEventListener("click", function (event) {
-                event.preventDefault();
-                localStorage.removeItem("role");
-                window.location.href = "home.html";
-            });
-        }
-
-        menu.appendChild(link);
+    menus[role].forEach(([icon, text, href]) => {
+        const a = document.createElement("a");
+        a.href = href;
+        a.innerHTML = `<span>${icon}</span>${text}`;
+        menu.appendChild(a);
     });
-});
+
+    const out = document.createElement("a");
+    out.href = "#";
+    out.innerHTML = "<span>⇥</span>Iziet";
+    out.addEventListener("click", async (e) => {
+        e.preventDefault();
+        await fetch("api.php?action=logout", { method: "POST", headers: { "X-CSRF-Token": csrf } });
+        window.location.href = "home.html";
+    });
+    menu.appendChild(out);
+})();

@@ -28,10 +28,10 @@
             <h2>Konta izveide</h2>
             <form id="registerForm">
                 <label for="RegLogin">Lietotājvārds</label>
-                <input id="RegLogin" type="text" required>
+                <input id="RegLogin" type="text" required pattern="[A-Za-z0-9_]{3,30}" title="3-30 simboli: burti, cipari, _">
 
                 <label for="RegPass">Parole</label>
-                <input id="RegPass" type="password" required>
+                <input id="RegPass" type="password" required minlength="8" maxlength="100" title="Vismaz 8 simboli">
 
                 <button type="submit">Reģistrēties</button>
                 <p id="regmessage" class="message"></p>

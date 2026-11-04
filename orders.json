@@ -1,0 +1,11 @@
+[
+    {
+        "id": 1,
+        "product_id": 1,
+        "product": "plaukts",
+        "qty": 1,
+        "client": "Janis",
+        "status": "Jauns",
+        "date": "2026-11-04 07:40"
+    }
+]

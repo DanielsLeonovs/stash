@@ -8,6 +8,7 @@ async function api(action, data) {
     const response = await fetch("api.php?action=" + action, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify(data)
     });
     return response.json();
@@ -23,8 +24,6 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
         showMessage("loginmessage", result.message);
         return;
     }
-    
-    localStorage.setItem("currentUser", result.user.login);
     window.location.href = "stash.html";
 });
 

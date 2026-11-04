@@ -3,8 +3,10 @@ const content = document.getElementById("content");
 async function api(action, data = {}) {
     const r = await fetch("api.php?action=" + action, {
         method: "POST",
-        body: JSON.stringify({ ...data, role })
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify(data)
     });
+    if (r.status === 401) { window.location.href = "home.html"; }
     return r.json();
 }
 
@@ -44,9 +46,9 @@ const views = {
         content.innerHTML = `<h2>Preces</h2>
             ${canEdit ? `<div class="box">
                 <input type="hidden" id="pid">
-                <input id="pname" placeholder="Nosaukums">
-                <input id="pqty" type="number" min="0" placeholder="Daudzums">
-                <input id="ploc" placeholder="Atrašanās vieta">
+                <input id="pname" placeholder="Nosaukums" required maxlength="100">
+                <input id="pqty" type="number" min="0" max="1000000" step="1" placeholder="Daudzums" required>
+                <input id="ploc" placeholder="Atrašanās vieta" maxlength="30">
                 <button onclick="saveProduct()">Saglabāt</button>
             </div>` : ""}
             <table><tr><th>ID</th><th>Nosaukums</th><th>Daudzums</th><th>Vieta</th><th></th></tr>
@@ -59,11 +61,11 @@ const views = {
 
     async users() {
         const { users } = await api("users_list");
-        const opts = sel => ["admin", "worker", "sorter"].map(r => `<option ${r === sel ? "selected" : ""}>${r}</option>`).join("");
+        const opts = sel => ["", "admin", "worker", "sorter"].map(r => `<option value="${r}" ${r === sel ? "selected" : ""}>${r || "— nav lomas —"}</option>`).join("");
         content.innerHTML = `<h2>Lietotāji</h2>
             <div class="box">
-                <input id="ulogin" placeholder="Lietotājvārds">
-                <input id="upass" type="password" placeholder="Parole">
+                <input id="ulogin" placeholder="Lietotājvārds" required pattern="[A-Za-z0-9_]{3,30}" title="3-30 simboli: burti, cipari, _">
+                <input id="upass" type="password" placeholder="Parole (min. 8)" required minlength="8" maxlength="100">
                 <select id="urole">${opts("worker")}</select>
                 <button onclick="addUser()">Izveidot</button>
             </div>
@@ -71,7 +73,7 @@ const views = {
             ${users.map((u, i) => `<tr>
                 <td>${esc(u.login)}</td>
                 <td><select id="r${i}">${opts(u.role)}</select></td>
-                <td><input id="p${i}" type="password" placeholder="(nemainīt)"></td>
+                <td><input id="p${i}" type="password" placeholder="(nemainīt)" minlength="8" maxlength="100"></td>
                 <td><button onclick="updUser('${esc(u.login)}', ${i})">Saglabāt</button>
                     <button onclick="delUser('${esc(u.login)}')">Dzēst</button></td>
             </tr>`).join("")}</table>`;
@@ -83,8 +85,8 @@ const views = {
         content.innerHTML = `<h2>Pasūtījumi</h2>
             <div class="box">
                 <select id="oprod">${products.map(p => `<option value="${p.id}">${esc(p.name)} (${p.qty})</option>`).join("")}</select>
-                <input id="oqty" type="number" min="1" placeholder="Daudzums">
-                <input id="oclient" placeholder="Klients">
+                <input id="oqty" type="number" min="1" max="10000" step="1" placeholder="Daudzums" required>
+                <input id="oclient" placeholder="Klients" required maxlength="100">
                 <button onclick="addOrder()">Izveidot pasūtījumu</button>
             </div>
             <table><tr><th>ID</th><th>Datums</th><th>Prece</th><th>Daudz.</th><th>Klients</th><th>Statuss</th><th></th></tr>
@@ -102,7 +104,7 @@ const views = {
             <table><tr><th>Prece</th><th>Daudz.</th><th>Atrašanās vieta</th><th></th></tr>
             ${products.map(p => `<tr>
                 <td>${esc(p.name)}</td><td>${p.qty}</td>
-                <td><input id="loc${p.id}" value="${esc(p.location)}" placeholder="piem. A-2-3"></td>
+                <td><input id="loc${p.id}" value="${esc(p.location)}" placeholder="piem. A-2-3" required maxlength="30"></td>
                 <td><button onclick="placeProduct(${p.id})">Saglabāt</button></td>
             </tr>`).join("")}</table>`;
     },
@@ -121,9 +123,16 @@ const views = {
     }
 };
 
+const valid = (...ids) => ids.every(id => {
+    const el = document.getElementById(id);
+    if (el.checkValidity()) return true;
+    el.reportValidity();
+    return false;
+});
 const val = id => document.getElementById(id).value;
 
 function saveProduct() {
+    if (!valid("pname", "pqty", "ploc")) return;
     act("product_save", { id: val("pid"), name: val("pname"), qty: val("pqty"), location: val("ploc") }, views.products);
 }
 function editProduct(p) {
@@ -132,20 +141,23 @@ function editProduct(p) {
 function delProduct(id) { if (confirm("Dzēst produktu?")) act("product_delete", { id }, views.products); }
 
 function addUser() {
-    act("register", { login: val("ulogin"), password: val("upass"), role: val("urole") }, views.users);
+    if (!valid("ulogin", "upass")) return;
+    act("user_create", { login: val("ulogin"), password: val("upass"), newRole: val("urole") }, views.users);
 }
 function updUser(login, i) {
+    if (!valid("p" + i)) return;
     act("user_update", { login, newRole: val("r" + i), newPassword: val("p" + i) }, views.users);
 }
 function delUser(login) { if (confirm("Dzēst lietotāju?")) act("user_delete", { login }, views.users); }
 
 function addOrder() {
+    if (!valid("oqty", "oclient")) return;
     act("order_save", { product_id: val("oprod"), qty: val("oqty"), client: val("oclient") }, views.orders);
 }
 function setStatus(id, status) { act("order_status", { id, status }, views.orders); }
 function delOrder(id) { if (confirm("Dzēst pasūtījumu?")) act("order_delete", { id }, views.orders); }
 
-function placeProduct(id) { act("place", { id, location: val("loc" + id) }, views.place); }
+function placeProduct(id) { if (!valid("loc" + id)) return; act("place", { id, location: val("loc" + id) }, views.place); }
 
 window.addEventListener("hashchange", show);
-show();
+ready.then(show);
