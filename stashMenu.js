@@ -29,30 +29,28 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (role === "admin") {
         buttons = [
-            ["⌂", "Sākums", "stash.html"],
-            ["＋", "Pievienot produktu", "#"],
-            ["＋", "Pievienot lietotāju", "#"],
-            ["♙", "Lietotāji", "#"],
+            ["⌂", "Sākums", "stash.html#home"],
+            ["▤", "Preces", "stash.html#products"],
+            ["♙", "Lietotāji", "stash.html#users"],
+            ["▤", "Pārskats", "stash.html#report"],
             ["⇥", "Iziet", "logout"]
         ];
     } else if (role === "worker") {
         buttons = [
-            ["⌂", "Sākums", "stash.html"],
-            ["🚚", "Veikt pasūtījumu", "#"],
-            ["▤", "Sagatavot atskaiti", "#"],
+            ["⌂", "Sākums", "stash.html#home"],
+            ["▤", "Preces", "stash.html#products"],
+            ["🚚", "Pasūtījumi", "stash.html#orders"],
+            ["▤", "Pārskats", "stash.html#report"],
             ["⇥", "Iziet", "logout"]
         ];
     } else if (role === "sorter") {
         buttons = [
-            ["⌂", "Sākums", "stash.html"],
-            ["▤", "Izvietot preces", "#"],
-            ["▤", "Sagatavot atskaiti", "#"],
-            ["♙", "Datu ievade", "#"],
+            ["⌂", "Sākums", "stash.html#home"],
+            ["▤", "Preces", "stash.html#products"],
+            ["▤", "Izvietot preces", "stash.html#place"],
+            ["▤", "Pārskats", "stash.html#report"],
             ["⇥", "Iziet", "logout"]
         ];
-    } else {
-        window.location.href = "home.html";
-        return;
     }
 
     menu.innerHTML = "";

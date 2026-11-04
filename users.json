@@ -1,17 +1,7 @@
 [
     {
-        "login": "1",
-        "password": "1",
+        "login": "admin",
+        "password": "admin",
         "role": "admin"
-    },
-    {
-        "login": "2",
-        "password": "2",
-        "role": "worker"
-    },
-    {
-        "login": "3",
-        "password": "3",
-        "role": "sorter"
     }
 ]
