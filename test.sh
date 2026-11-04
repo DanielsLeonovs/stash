@@ -16,8 +16,7 @@ expect "admin: pievieno preci"  "$(call admin product_save '{"name":"Skrūve","q
 expect "admin: negatīvs daudzums noraidīts" "$(call admin product_save '{"name":"Slikta","qty":"-5","location":""}')" false
 expect "admin: nevar dzēst sevi" "$(call admin user_delete '{"login":"admin"}')" false
 
-expect "reģistrācija bez lomas" "$(curl -s -X POST -d '{"login":"jauns1","password":"parole123","role":"admin"}' $B?action=register)" true
-expect "konts bez lomas nevar ieiet" "$(login nr jauns1 parole123)" false
+expect "publiskā reģistrācija noņemta" "$(curl -s -X POST -d '{"login":"jauns1","password":"parole123"}' $B?action=register)" false
 expect "nepareiza parole" "$(login bad admin nepareiza)" false
 
 login w worker1 parole123 >/dev/null

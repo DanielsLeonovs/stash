@@ -26,16 +26,3 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     }
     window.location.href = "stash.html";
 });
-
-document.getElementById("registerForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const login = document.getElementById("RegLogin").value.trim();
-    const password = document.getElementById("RegPass").value;
-
-    const result = await api("register", { login, password});
-    showMessage("regmessage", result.message, !result.success);
-    if (result.success) {
-        e.target.reset();
-        document.getElementById("LoginName").value = login;
-    }
-});

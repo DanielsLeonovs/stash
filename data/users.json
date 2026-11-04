@@ -6,12 +6,12 @@
     },
     {
         "login": "1",
-        "password": "1",
+        "password": "$2y$10$wmKfE9FuG5TTzgJe89yMOeHmmgJAFYxqkQVJ8lp3upYCGX4dGDddK",
         "role": "worker"
     },
     {
         "login": "2",
-        "password": "2",
+        "password": "$2y$10$vBdaAO8Cg6yp6wbbN6jRU.En2GQWAKypltusayuJvUBTy1PGi84BG",
         "role": "sorter"
     }
 ]

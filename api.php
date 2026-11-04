@@ -52,17 +52,6 @@ if ($action === 'me') {
     reply(true, 'OK', ['login' => $_SESSION['login'], 'role' => $_SESSION['role'], 'csrf' => $_SESSION['csrf']]);
 }
 
-if ($action === 'register') {            // loma netiek piešķirta - to dara administrators
-    $login = trim($input['login'] ?? '');
-    $password = $input['password'] ?? '';
-    if (!vLogin($login)) reply(false, 'Lietotājvārds: 3-30 simboli (burti, cipari, _).');
-    if (!vPass($password)) reply(false, 'Parolei jābūt vismaz 8 simbolus garai.');
-    foreach ($users as $u) if (strcasecmp($u['login'], $login) === 0) reply(false, 'Šāds lietotājvārds jau eksistē!');
-    $users[] = ['login' => $login, 'password' => password_hash($password, PASSWORD_DEFAULT), 'role' => ''];
-    store('users', $users);
-    reply(true, 'Konts izveidots! Administrators tev piešķirs lomu.');
-}
-
 if ($action === 'login') {
     $login = trim($input['login'] ?? '');
     $password = (string)($input['password'] ?? '');
