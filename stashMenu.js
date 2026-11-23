@@ -1,10 +1,9 @@
-// Loma un CSRF token tiek ņemti no servera sesijas (nevis no localStorage)
 let role = null, csrf = null;
 
 const menus = {
     admin: [["⌂", "Sākums", "#home"], ["▤", "Preces", "#products"], ["♙", "Lietotāji", "#users"], ["▤", "Pārskats", "#report"]],
     worker: [["⌂", "Sākums", "#home"], ["▤", "Preces", "#products"], ["🚚", "Pasūtījumi", "#orders"], ["▤", "Pārskats", "#report"]],
-    sorter: [["⌂", "Sākums", "#home"], ["▤", "Preces", "#products"], ["▤", "Izvietot preces", "#place"], ["▤", "Pārskats", "#report"]]
+    sorter: [["⌂", "Sākums", "#home"], ["▤", "Preces", "#products"], ["▤", "Izvietot preces", "#place"], ["↺", "Izmaiņu vēsture", "#history"], ["▤", "Pārskats", "#report"]]
 };
 
 const ready = (async () => {

@@ -5,13 +5,13 @@
         "role": "admin"
     },
     {
-        "login": "1",
-        "password": "$2y$10$wmKfE9FuG5TTzgJe89yMOeHmmgJAFYxqkQVJ8lp3upYCGX4dGDddK",
-        "role": "worker"
+        "login": "2",
+        "password": "$2y$10$x\/5ntWEBN7UbbwenWZpi1uREV68Dpw9OmeUZ6shqWkr3xxO8.IF2.",
+        "role": "sorter"
     },
     {
-        "login": "2",
-        "password": "$2y$10$vBdaAO8Cg6yp6wbbN6jRU.En2GQWAKypltusayuJvUBTy1PGi84BG",
-        "role": "sorter"
+        "login": "12345678",
+        "password": "$2y$10$4U1MGLQSYnxAS.i2Cu\/mHu5\/BTUFDSHIciDdOULzh\/ndt1SGh\/lee",
+        "role": "worker"
     }
 ]

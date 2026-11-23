@@ -1,20 +1,23 @@
 [
     {
         "id": 1,
-        "name": "aaaa",
-        "qty": 122,
-        "location": "Cesis"
+        "name": "1234",
+        "qty": 1086,
+        "location": "Valmierasssss",
+        "condition": "Jāpārbauda"
     },
     {
         "id": 2,
-        "name": "eww",
-        "qty": 444,
-        "location": "fwefwef"
+        "name": "gffg",
+        "qty": 3,
+        "location": "Limbazi",
+        "condition": "Labā"
     },
     {
         "id": 3,
-        "name": "rggngrrt",
-        "qty": 12314,
-        "location": "dbgebevb"
+        "name": "kloj",
+        "qty": 44444,
+        "location": "Cesis",
+        "condition": "Bojāta"
     }
 ]

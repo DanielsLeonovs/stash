@@ -14,7 +14,10 @@ function esc(s) {
     return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+const CONDS = ["Labā", "Bojāta", "Jāpārbauda"];
+
 const access = {
+    history: ["sorter"],
     home: ["admin", "worker", "sorter"],
     products: ["admin", "worker", "sorter"],
     users: ["admin"],
@@ -51,9 +54,9 @@ const views = {
                 <input id="ploc" placeholder="Atrašanās vieta" maxlength="30">
                 <button onclick="saveProduct()">Saglabāt</button>
             </div>` : ""}
-            <table><tr><th>ID</th><th>Nosaukums</th><th>Daudzums</th><th>Vieta</th><th></th></tr>
+            <table><tr><th>ID</th><th>Nosaukums</th><th>Daudzums</th><th>Vieta</th><th>Stāvoklis</th><th></th></tr>
             ${products.map(p => `<tr>
-                <td>${p.id}</td><td>${esc(p.name)}</td><td>${p.qty}</td><td>${esc(p.location)}</td>
+                <td>${p.id}</td><td>${esc(p.name)}</td><td>${p.qty}</td><td>${esc(p.location)}</td><td>${esc(p.condition || "Labā")}</td>
                 <td>${canEdit ? `<button onclick='editProduct(${JSON.stringify(p)})'>Labot</button>` : ""}
                     ${role === "admin" ? `<button onclick="delProduct(${p.id})">Dzēst</button>` : ""}</td>
             </tr>`).join("")}</table>`;
@@ -101,12 +104,21 @@ const views = {
     async place() {
         const { products } = await api("products_list");
         content.innerHTML = `<h2>Preču izvietošana</h2>
-            <table><tr><th>Prece</th><th>Daudz.</th><th>Atrašanās vieta</th><th></th></tr>
+            <table><tr><th>Prece</th><th>Daudz.</th><th>Atrašanās vieta</th><th>Stāvoklis</th><th></th></tr>
             ${products.map(p => `<tr>
                 <td>${esc(p.name)}</td><td>${p.qty}</td>
                 <td><input id="loc${p.id}" value="${esc(p.location)}" placeholder="piem. A-2-3" required maxlength="30"></td>
+                <td><select id="cond${p.id}">${CONDS.map(c => `<option ${c === (p.condition || "Labā") ? "selected" : ""}>${c}</option>`).join("")}</select></td>
                 <td><button onclick="placeProduct(${p.id})">Saglabāt</button></td>
             </tr>`).join("")}</table>`;
+    },
+
+    async history() {
+        const { log } = await api("log_list");
+        content.innerHTML = `<h2>Izvietojuma izmaiņu vēsture</h2>
+            <table><tr><th>Datums</th><th>Prece</th><th>No</th><th>Uz</th><th>Stāvoklis</th><th>Kas veica</th></tr>
+            ${log.map(l => `<tr><td>${esc(l.date)}</td><td>${esc(l.product)}</td><td>${esc(l.from || "—")}</td>
+                <td>${esc(l.to)}</td><td>${esc(l.cond || "")}</td><td>${esc(l.by || "")}</td></tr>`).join("")}</table>`;
     },
 
     async report() {
@@ -117,8 +129,10 @@ const views = {
             <p>Preču veidu skaits: <b>${r.products.length}</b> | Kopējais daudzums: <b>${r.total_qty}</b></p>
             <h3>Zems atlikums (&lt; 5)</h3>${list(r.low_stock, p => `<li>${esc(p.name)} — ${p.qty}</li>`)}
             <h3>Preces bez atrašanās vietas</h3>${list(r.no_place, p => `<li>${esc(p.name)}</li>`)}
+            <h3>Preču daudzums pa atrašanās vietām</h3>${list(Object.entries(r.by_location), ([k, n]) => `<li>${esc(k)}: ${n} gab.</li>`)}
+            <h3>Preču stāvoklis</h3>${list(Object.entries(r.conditions), ([k, n]) => `<li>${esc(k)}: ${n}</li>`)}
             <h3>Pasūtījumi pēc statusa</h3>${list(Object.entries(r.orders), ([s, n]) => `<li>${s}: ${n}</li>`)}
-            <h3>Pēdējās izvietojuma izmaiņas</h3>${list(r.log, l => `<li>${l.date}: ${esc(l.product)} — ${esc(l.from || "nav")} → ${esc(l.to)}</li>`)}
+            <h3>Pēdējās izvietojuma izmaiņas</h3>${list(r.log, l => `<li>${l.date}: ${esc(l.product)} — ${esc(l.from || "nav")} → ${esc(l.to)} (${esc(l.cond || "")}${l.by ? ", " + esc(l.by) : ""})</li>`)}
             <button onclick="window.print()">Drukāt / saglabāt PDF</button>`;
     }
 };
@@ -132,20 +146,30 @@ const valid = (...ids) => ids.every(id => {
 const val = id => document.getElementById(id).value;
 
 function saveProduct() {
-    if (!valid("pname", "pqty", "ploc")) return;
+    if (!valid("pname", "pqty", "ploc")) {
+        return;
+    }
     act("product_save", { id: val("pid"), name: val("pname"), qty: val("pqty"), location: val("ploc") }, views.products);
 }
 function editProduct(p) {
     pid.value = p.id; pname.value = p.name; pqty.value = p.qty; ploc.value = p.location;
 }
-function delProduct(id) { if (confirm("Dzēst produktu?")) act("product_delete", { id }, views.products); }
+function delProduct(id) { 
+    if (confirm("Dzēst produktu?")) {
+        act("product_delete", { id }, views.products); 
+    }
+}
 
 function addUser() {
-    if (!valid("ulogin", "upass")) return;
+    if (!valid("ulogin", "upass")) {
+        return;
+    }
     act("user_create", { login: val("ulogin"), password: val("upass"), newRole: val("urole") }, views.users);
 }
 function updUser(login, i) {
-    if (!valid("p" + i)) return;
+    if (!valid("p" + i)) {
+        return;
+    }
     act("user_update", { login, newRole: val("r" + i), newPassword: val("p" + i) }, views.users);
 }
 function delUser(login) { if (confirm("Dzēst lietotāju?")) act("user_delete", { login }, views.users); }
@@ -154,10 +178,21 @@ function addOrder() {
     if (!valid("oqty", "oclient")) return;
     act("order_save", { product_id: val("oprod"), qty: val("oqty"), client: val("oclient") }, views.orders);
 }
-function setStatus(id, status) { act("order_status", { id, status }, views.orders); }
-function delOrder(id) { if (confirm("Dzēst pasūtījumu?")) act("order_delete", { id }, views.orders); }
+function setStatus(id, status) { 
+    act("order_status", { id, status }, views.orders); 
+}
+function delOrder(id) { 
+    if (confirm("Dzēst pasūtījumu?")) {
+        act("order_delete", { id }, views.orders); 
+    }
+}
 
-function placeProduct(id) { if (!valid("loc" + id)) return; act("place", { id, location: val("loc" + id) }, views.place); }
+function placeProduct(id) { 
+    if (!valid("loc" + id)) {
+        return; 
+    }
+    act("place", { id, location: val("loc" + id), condition: val("cond" + id) }, views.place); 
+}
 
 window.addEventListener("hashchange", show);
 ready.then(show);

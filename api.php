@@ -1,5 +1,4 @@
 <?php
-// Dati glabājas data/ mapē (router.php liedz tai piekļūt pa tīklu)
 const DATA = __DIR__ . '/data';
 if (!is_dir(DATA)) mkdir(DATA, 0700);
 if (!file_exists(DATA . '/users.json') && file_exists(__DIR__ . '/users.json')) {
@@ -13,6 +12,7 @@ session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict']);
 session_start();
 
 const ROLES = ['admin', 'worker', 'sorter'];
+const CONDITIONS = ['Labā', 'Bojāta', 'Jāpārbauda'];
 const STATUSES = ['Jauns', 'Komplektē', 'Nosūtīts', 'Piegādāts'];
 
 function reply($ok, $msg, $extra = [], $code = 200) {
@@ -34,7 +34,6 @@ function nextId($list) {
     return $max + 1;
 }
 
-/* ---------- validācija ---------- */
 function vLogin($s)  { return is_string($s) && preg_match('/^[A-Za-z0-9_]{3,30}$/', $s); }
 function vPass($s)   { return is_string($s) && strlen($s) >= 8 && strlen($s) <= 100; }
 function vText($s, $max) { return is_string($s) && mb_strlen($s) >= 1 && mb_strlen($s) <= $max; }
@@ -46,7 +45,6 @@ if (!is_array($input)) $input = [];
 $action = $_GET['action'] ?? '';
 $users = load('users');
 
-/* ---------- publiskās darbības ---------- */
 if ($action === 'me') {
     if (empty($_SESSION['login'])) reply(false, 'Nav pieteicies.', [], 401);
     reply(true, 'OK', ['login' => $_SESSION['login'], 'role' => $_SESSION['role'], 'csrf' => $_SESSION['csrf']]);
@@ -66,18 +64,17 @@ if ($action === 'login') {
         $_SESSION = ['login' => $u['login'], 'role' => $u['role'], 'csrf' => bin2hex(random_bytes(16))];
         reply(true, 'OK', ['role' => $u['role']]);
     }
-    sleep(1);                             // palēnina paroļu minēšanu
+    sleep(1);                            
     reply(false, 'Nepareizs lietotājvārds vai parole!');
 }
 
-/* ---------- tiesību tabula: darbība => atļautās lomas ---------- */
 $all = ROLES;
 $perm = [
     'logout' => $all, 'products_list' => $all, 'report' => $all,
     'users_list' => ['admin'], 'user_create' => ['admin'], 'user_update' => ['admin'], 'user_delete' => ['admin'],
     'product_save' => ['admin', 'worker'], 'product_delete' => ['admin'],
     'orders_list' => ['worker'], 'order_save' => ['worker'], 'order_status' => ['worker'], 'order_delete' => ['worker'],
-    'place' => ['sorter'],
+    'place' => ['sorter'], 'log_list' => ['sorter'],
 ];
 if (!isset($perm[$action])) reply(false, 'Nezināma darbība.', [], 404);
 if (empty($_SESSION['login'])) reply(false, 'Nav pieteicies.', [], 401);
@@ -88,7 +85,6 @@ $me = $_SESSION['login'];
 
 if ($action === 'logout') { session_destroy(); reply(true, 'OK'); }
 
-/* ---------- lietotāji (admin) ---------- */
 if ($action === 'users_list') {
     reply(true, 'OK', ['users' => array_map(fn($u) => ['login' => $u['login'], 'role' => $u['role']], $users), 'me' => $me]);
 }
@@ -129,7 +125,6 @@ if ($action === 'user_delete') {
     reply(true, 'Lietotājs dzēsts!');
 }
 
-/* ---------- preces ---------- */
 if ($action === 'products_list') reply(true, 'OK', ['products' => load('products')]);
 
 if ($action === 'product_save') {
@@ -147,7 +142,7 @@ if ($action === 'product_save') {
         unset($p);
         if (!$found) reply(false, 'Produkts nav atrasts!');
     } else {
-        $products[] = ['id' => nextId($products), 'name' => $name, 'qty' => $qty, 'location' => $loc];
+        $products[] = ['id' => nextId($products), 'name' => $name, 'qty' => $qty, 'location' => $loc, 'condition' => 'Labā'];
     }
     store('products', $products);
     reply(true, 'Produkts saglabāts!');
@@ -159,7 +154,6 @@ if ($action === 'product_delete') {
     reply(true, 'Produkts dzēsts!');
 }
 
-/* ---------- pasūtījumi (worker) ---------- */
 if ($action === 'orders_list') reply(true, 'OK', ['orders' => load('orders'), 'statuses' => STATUSES]);
 
 if ($action === 'order_save') {
@@ -198,7 +192,6 @@ if ($action === 'order_delete') {
     reply(true, 'Pasūtījums dzēsts!');
 }
 
-/* ---------- izvietojums (sorter) ---------- */
 if ($action === 'place') {
     $products = load('products');
     $log = load('log');
@@ -207,8 +200,12 @@ if ($action === 'place') {
     $id = (int)($input['id'] ?? 0);
     foreach ($products as &$p) {
         if ($p['id'] !== $id) continue;
-        $log[] = ['date' => date('Y-m-d H:i'), 'product' => $p['name'], 'from' => $p['location'], 'to' => $loc, 'by' => $me];
+        $cond = $input['condition'] ?? ($p['condition'] ?? 'Labā');
+        if (!in_array($cond, CONDITIONS, true)) reply(false, 'Nederīgs stāvoklis!');
+        $log[] = ['date' => date('Y-m-d H:i'), 'product' => $p['name'], 'from' => $p['location'], 'to' => $loc,
+                  'cond' => $cond, 'by' => $me];
         $p['location'] = $loc;
+        $p['condition'] = $cond;
         store('products', $products);
         store('log', $log);
         reply(true, 'Izvietojums saglabāts!');
@@ -216,12 +213,24 @@ if ($action === 'place') {
     reply(false, 'Produkts nav atrasts!');
 }
 
-/* ---------- pārskats ---------- */
+if ($action === 'log_list') {
+    reply(true, 'OK', ['log' => array_slice(array_reverse(load('log')), 0, 200), 'conditions' => CONDITIONS]);
+}
+
 if ($action === 'report') {
     $products = load('products');
     $byStatus = [];
     foreach (load('orders') as $o) $byStatus[$o['status']] = ($byStatus[$o['status']] ?? 0) + 1;
+    $byLoc = [];
+    $conds = [];
+    foreach ($products as $p) {
+        $k = $p['location'] === '' ? '(nav norādīta)' : $p['location'];
+        $byLoc[$k] = ($byLoc[$k] ?? 0) + $p['qty'];
+        $c = $p['condition'] ?? 'Labā';
+        $conds[$c] = ($conds[$c] ?? 0) + 1;
+    }
     reply(true, 'OK', [
+        'by_location' => (object)$byLoc, 'conditions' => (object)$conds,
         'date' => date('Y-m-d H:i'), 'products' => $products, 'total_qty' => array_sum(array_column($products, 'qty')),
         'low_stock' => array_values(array_filter($products, fn($p) => $p['qty'] < 5)),
         'no_place' => array_values(array_filter($products, fn($p) => $p['location'] === '')),
