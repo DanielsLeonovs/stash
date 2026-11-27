@@ -1,9 +1,9 @@
 <?php
-const DATA = __DIR__ . '/data';
-if (!is_dir(DATA)) mkdir(DATA, 0700);
-if (!file_exists(DATA . '/users.json') && file_exists(__DIR__ . '/users.json')) {
-    copy(__DIR__ . '/users.json', DATA . '/users.json');   // vecā faila pārnešana
-}
+// Stash noliktavas API
+// Visi pieprasijumi nak uz api.php?action=... un atbilde vienmer ir JSON.
+// Dati glabajas MySQL datubaze (skat db.php un schema.sql).
+
+require_once __DIR__ . '/db.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -12,228 +12,521 @@ session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict']);
 session_start();
 
 const ROLES = ['admin', 'worker', 'sorter'];
-const CONDITIONS = ['Labā', 'Bojāta', 'Jāpārbauda'];
 const STATUSES = ['Jauns', 'Komplektē', 'Nosūtīts', 'Piegādāts'];
+const LOW_STOCK = 5; // ja preces ir mazak par so skaitli, tad rada bridinajumu
 
-function reply($ok, $msg, $extra = [], $code = 200) {
+
+// ---------- palidzes funkcijas ----------
+
+// nosuta atbildi un beidz darbu
+function reply($ok, $message, $extra = [], $code = 200) {
     http_response_code($code);
-    echo json_encode(array_merge(['success' => $ok, 'message' => $msg], $extra));
+    $data = array_merge(['success' => $ok, 'message' => $message], $extra);
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit;
 }
-function load($name) {
-    $f = DATA . "/$name.json";
-    $d = file_exists($f) ? json_decode(file_get_contents($f), true) : [];
-    return is_array($d) ? $d : [];
-}
-function store($name, $d) {
-    file_put_contents(DATA . "/$name.json", json_encode(array_values($d), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
-}
-function nextId($list) {
-    $max = 0;
-    foreach ($list as $i) $max = max($max, $i['id']);
-    return $max + 1;
+
+// izpilda SQL ar parametriem
+function run($sql, $params = []) {
+    global $pdo;
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return $stmt;
 }
 
-function vLogin($s)  { return is_string($s) && preg_match('/^[A-Za-z0-9_]{3,30}$/', $s); }
-function vPass($s)   { return is_string($s) && strlen($s) >= 8 && strlen($s) <= 100; }
-function vText($s, $max) { return is_string($s) && mb_strlen($s) >= 1 && mb_strlen($s) <= $max; }
-function vLoc($s)    { return is_string($s) && preg_match('/^[\p{L}0-9 \-\/]{0,30}$/u', $s); }
-function vInt($v, $min, $max) { return filter_var($v, FILTER_VALIDATE_INT, ['options' => ['min_range' => $min, 'max_range' => $max]]) !== false; }
+// ieraksta preces kustibu vesture
+function addLog($productId, $productName, $action, $qtyChange, $from, $to) {
+    global $me;
+    run('INSERT INTO stock_log (product_id, product, action, qty_change, from_loc, to_loc, by_user, created_at)
+         VALUES (?,?,?,?,?,?,?,?)',
+        [$productId, $productName, $action, $qtyChange, $from, $to, $me, date('Y-m-d H:i:s')]);
+}
+
+
+// ---------- datu parbaudes ----------
+
+function okLogin($s) {
+    return is_string($s) && preg_match('/^[A-Za-z0-9_]{3,30}$/', $s);
+}
+
+function okPassword($s) {
+    return is_string($s) && strlen($s) >= 8 && strlen($s) <= 100;
+}
+
+function okText($s, $max) {
+    return is_string($s) && mb_strlen($s) >= 1 && mb_strlen($s) <= $max;
+}
+
+function okLocation($s) {
+    return is_string($s) && preg_match('/^[\p{L}0-9 \-\/]{0,30}$/u', $s);
+}
+
+function okCode($s) {
+    return is_string($s) && preg_match('/^[A-Za-z0-9_\-]{2,30}$/', $s);
+}
+
+function okInt($value, $min, $max) {
+    $options = ['options' => ['min_range' => $min, 'max_range' => $max]];
+    return filter_var($value, FILTER_VALIDATE_INT, $options) !== false;
+}
+
+function okPrice($value) {
+    if (filter_var($value, FILTER_VALIDATE_FLOAT) === false) {
+        return false;
+    }
+    return (float)$value >= 0 && (float)$value <= 1000000;
+}
+
+
+// ---------- sakums ----------
+
+$pdo = db();
 
 $input = json_decode(file_get_contents('php://input'), true);
-if (!is_array($input)) $input = [];
+if (!is_array($input)) {
+    $input = [];
+}
 $action = $_GET['action'] ?? '';
-$users = load('users');
 
+
+// kas ir pieteicies
 if ($action === 'me') {
-    if (empty($_SESSION['login'])) reply(false, 'Nav pieteicies.', [], 401);
-    reply(true, 'OK', ['login' => $_SESSION['login'], 'role' => $_SESSION['role'], 'csrf' => $_SESSION['csrf']]);
+    if (empty($_SESSION['login'])) {
+        reply(false, 'Nav pieteicies.', [], 401);
+    }
+    reply(true, 'OK', [
+        'login' => $_SESSION['login'],
+        'role' => $_SESSION['role'],
+        'csrf' => $_SESSION['csrf'],
+    ]);
 }
 
+// pieteiksanas
 if ($action === 'login') {
     $login = trim($input['login'] ?? '');
     $password = (string)($input['password'] ?? '');
-    foreach ($users as $i => $u) {
-        if (strcasecmp($u['login'], $login) !== 0) continue;
-        $hashed = str_starts_with($u['password'], '$');
-        $ok = $hashed ? password_verify($password, $u['password']) : hash_equals($u['password'], $password);
-        if (!$ok) break;
-        if (!$hashed) { $users[$i]['password'] = password_hash($password, PASSWORD_DEFAULT); store('users', $users); }
-        if ($u['role'] === '') reply(false, 'Konts gaida administratora apstiprinājumu (loma nav piešķirta).');
-        session_regenerate_id(true);
-        $_SESSION = ['login' => $u['login'], 'role' => $u['role'], 'csrf' => bin2hex(random_bytes(16))];
-        reply(true, 'OK', ['role' => $u['role']]);
+
+    $user = run('SELECT * FROM users WHERE login = ? LIMIT 1', [$login])->fetch();
+
+    if ($user) {
+        // vecie konti varetu but ar paroli bez hash (sak. ar $), tos nomainam uz hash
+        $isHash = str_starts_with($user['password'], '$');
+        if ($isHash) {
+            $passwordOk = password_verify($password, $user['password']);
+        } else {
+            $passwordOk = hash_equals($user['password'], $password);
+        }
+
+        if ($passwordOk) {
+            if (!$isHash) {
+                run('UPDATE users SET password = ? WHERE id = ?',
+                    [password_hash($password, PASSWORD_DEFAULT), $user['id']]);
+            }
+            if ($user['role'] === '') {
+                reply(false, 'Konts gaida administratora apstiprinājumu (loma nav piešķirta).');
+            }
+            session_regenerate_id(true);
+            $_SESSION = [
+                'login' => $user['login'],
+                'role' => $user['role'],
+                'csrf' => bin2hex(random_bytes(16)),
+            ];
+            reply(true, 'OK', ['role' => $user['role']]);
+        }
     }
-    sleep(1);                            
+
+    sleep(1); // lai nevar atminet paroli atri
     reply(false, 'Nepareizs lietotājvārds vai parole!');
 }
 
-$all = ROLES;
-$perm = [
-    'logout' => $all, 'products_list' => $all, 'report' => $all,
-    'users_list' => ['admin'], 'user_create' => ['admin'], 'user_update' => ['admin'], 'user_delete' => ['admin'],
-    'product_save' => ['admin', 'worker'], 'product_delete' => ['admin'],
-    'orders_list' => ['worker'], 'order_save' => ['worker'], 'order_status' => ['worker'], 'order_delete' => ['worker'],
-    'place' => ['sorter'], 'log_list' => ['sorter'],
+
+// ---------- tiesibu parbaude ----------
+// kura loma ko drikst darit
+$permissions = [
+    'logout'          => ROLES,
+    'products_list'   => ROLES,
+    'report'          => ROLES,
+    'suppliers_list'  => ROLES,
+
+    'users_list'      => ['admin'],
+    'user_create'     => ['admin'],
+    'user_update'     => ['admin'],
+    'user_delete'     => ['admin'],
+
+    'product_save'    => ['admin', 'worker'],
+    'product_receive' => ['admin', 'worker'],
+    'product_delete'  => ['admin'],
+
+    'supplier_save'   => ['admin'],
+    'supplier_delete' => ['admin'],
+
+    'orders_list'     => ['worker'],
+    'order_save'      => ['worker'],
+    'order_status'    => ['worker'],
+    'order_delete'    => ['worker'],
+
+    'place'           => ['sorter'],
 ];
-if (!isset($perm[$action])) reply(false, 'Nezināma darbība.', [], 404);
-if (empty($_SESSION['login'])) reply(false, 'Nav pieteicies.', [], 401);
-if (!in_array($_SESSION['role'], $perm[$action], true)) reply(false, 'Nav piekļuves tiesību!', [], 403);
-if (!hash_equals($_SESSION['csrf'], $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')) reply(false, 'Nederīgs pieprasījums.', [], 403);
+
+if (!isset($permissions[$action])) {
+    reply(false, 'Nezināma darbība.', [], 404);
+}
+if (empty($_SESSION['login'])) {
+    reply(false, 'Nav pieteicies.', [], 401);
+}
+if (!in_array($_SESSION['role'], $permissions[$action], true)) {
+    reply(false, 'Nav piekļuves tiesību!', [], 403);
+}
+// CSRF tokens jasuta header X-CSRF-Token
+if (!hash_equals($_SESSION['csrf'], $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')) {
+    reply(false, 'Nederīgs pieprasījums.', [], 403);
+}
 
 $me = $_SESSION['login'];
 
-if ($action === 'logout') { session_destroy(); reply(true, 'OK'); }
+
+// ---------- iziet ----------
+
+if ($action === 'logout') {
+    session_destroy();
+    reply(true, 'OK');
+}
+
+
+// ---------- lietotaji (tikai admin) ----------
 
 if ($action === 'users_list') {
-    reply(true, 'OK', ['users' => array_map(fn($u) => ['login' => $u['login'], 'role' => $u['role']], $users), 'me' => $me]);
+    $users = $pdo->query('SELECT login, role FROM users ORDER BY id')->fetchAll();
+    reply(true, 'OK', ['users' => $users, 'me' => $me]);
 }
 
 if ($action === 'user_create') {
     $login = trim($input['login'] ?? '');
-    if (!vLogin($login)) reply(false, 'Lietotājvārds: 3-30 simboli (burti, cipari, _).');
-    if (!vPass($input['password'] ?? '')) reply(false, 'Parolei jābūt vismaz 8 simbolus garai.');
-    if (!in_array($input['newRole'] ?? '', ROLES, true)) reply(false, 'Izvēlies lomu!');
-    foreach ($users as $u) if (strcasecmp($u['login'], $login) === 0) reply(false, 'Šāds lietotājvārds jau eksistē!');
-    $users[] = ['login' => $login, 'password' => password_hash($input['password'], PASSWORD_DEFAULT), 'role' => $input['newRole']];
-    store('users', $users);
+    $password = $input['password'] ?? '';
+    $newRole = $input['newRole'] ?? '';
+
+    if (!okLogin($login)) {
+        reply(false, 'Lietotājvārds: 3-30 simboli (burti, cipari, _).');
+    }
+    if (!okPassword($password)) {
+        reply(false, 'Parolei jābūt vismaz 8 simbolus garai.');
+    }
+    if (!in_array($newRole, ROLES, true)) {
+        reply(false, 'Izvēlies lomu!');
+    }
+
+    $exists = run('SELECT id FROM users WHERE login = ?', [$login])->fetch();
+    if ($exists) {
+        reply(false, 'Šāds lietotājvārds jau eksistē!');
+    }
+
+    run('INSERT INTO users (login, password, role) VALUES (?, ?, ?)',
+        [$login, password_hash($password, PASSWORD_DEFAULT), $newRole]);
     reply(true, 'Lietotājs izveidots!');
 }
 
 if ($action === 'user_update') {
     $login = $input['login'] ?? '';
     $newRole = $input['newRole'] ?? '';
-    $newPass = $input['newPassword'] ?? '';
-    if (!in_array($newRole, ROLES, true)) reply(false, 'Nederīga loma!');
-    if ($newPass !== '' && !vPass($newPass)) reply(false, 'Parolei jābūt vismaz 8 simbolus garai.');
-    $admins = count(array_filter($users, fn($u) => $u['role'] === 'admin'));
-    foreach ($users as &$u) {
-        if ($u['login'] !== $login) continue;
-        if ($u['role'] === 'admin' && $newRole !== 'admin' && $admins <= 1) reply(false, 'Nevar noņemt pēdējo administratoru!');
-        $u['role'] = $newRole;
-        if ($newPass !== '') $u['password'] = password_hash($newPass, PASSWORD_DEFAULT);
-        store('users', $users);
-        reply(true, 'Lietotājs atjaunināts!');
+    $newPassword = $input['newPassword'] ?? '';
+
+    if (!in_array($newRole, ROLES, true)) {
+        reply(false, 'Nederīga loma!');
     }
-    reply(false, 'Lietotājs nav atrasts!');
+    if ($newPassword !== '' && !okPassword($newPassword)) {
+        reply(false, 'Parolei jābūt vismaz 8 simbolus garai.');
+    }
+
+    $user = run('SELECT * FROM users WHERE login = ?', [$login])->fetch();
+    if (!$user) {
+        reply(false, 'Lietotājs nav atrasts!');
+    }
+
+    // vismaz vienam adminam japaliek
+    $adminCount = (int)run("SELECT COUNT(*) AS c FROM users WHERE role = 'admin'")->fetch()['c'];
+    if ($user['role'] === 'admin' && $newRole !== 'admin' && $adminCount <= 1) {
+        reply(false, 'Nevar noņemt pēdējo administratoru!');
+    }
+
+    if ($newPassword !== '') {
+        run('UPDATE users SET role = ?, password = ? WHERE login = ?',
+            [$newRole, password_hash($newPassword, PASSWORD_DEFAULT), $login]);
+    } else {
+        run('UPDATE users SET role = ? WHERE login = ?', [$newRole, $login]);
+    }
+    reply(true, 'Lietotājs atjaunināts!');
 }
 
 if ($action === 'user_delete') {
     $login = $input['login'] ?? '';
-    if ($login === $me) reply(false, 'Savu kontu dzēst nevar!');
-    store('users', array_filter($users, fn($u) => $u['login'] !== $login));
+    if ($login === $me) {
+        reply(false, 'Savu kontu dzēst nevar!');
+    }
+    run('DELETE FROM users WHERE login = ?', [$login]);
     reply(true, 'Lietotājs dzēsts!');
 }
 
-if ($action === 'products_list') reply(true, 'OK', ['products' => load('products')]);
+
+// ---------- piegadataji ----------
+
+if ($action === 'suppliers_list') {
+    $suppliers = $pdo->query('SELECT * FROM suppliers ORDER BY name')->fetchAll();
+    reply(true, 'OK', ['suppliers' => $suppliers]);
+}
+
+if ($action === 'supplier_save') {
+    $name = trim($input['name'] ?? '');
+    $contact = trim($input['contact'] ?? '');
+    $id = (int)($input['id'] ?? 0);
+
+    if (!okText($name, 100)) {
+        reply(false, 'Nosaukums: 1-100 simboli.');
+    }
+    if ($contact !== '' && !okText($contact, 100)) {
+        reply(false, 'Kontakti: līdz 100 simboliem.');
+    }
+
+    if ($id) {
+        run('UPDATE suppliers SET name = ?, contact = ? WHERE id = ?', [$name, $contact, $id]);
+    } else {
+        run('INSERT INTO suppliers (name, contact) VALUES (?, ?)', [$name, $contact]);
+    }
+    reply(true, 'Piegādātājs saglabāts!');
+}
+
+if ($action === 'supplier_delete') {
+    $id = (int)($input['id'] ?? 0);
+    run('DELETE FROM suppliers WHERE id = ?', [$id]);
+    reply(true, 'Piegādātājs dzēsts!');
+}
+
+
+// ---------- preces ----------
+
+if ($action === 'products_list') {
+    // meklesana pec nosaukuma un kategorijas (nav obligata)
+    $q = trim($input['q'] ?? ($_GET['q'] ?? ''));
+    $category = trim($input['category'] ?? ($_GET['category'] ?? ''));
+
+    $sql = 'SELECT p.*, s.name AS supplier_name
+            FROM products p
+            LEFT JOIN suppliers s ON s.id = p.supplier_id
+            WHERE 1=1';
+    $params = [];
+    if ($q !== '') {
+        $sql .= ' AND p.name LIKE ?';
+        $params[] = '%' . $q . '%';
+    }
+    if ($category !== '') {
+        $sql .= ' AND p.category LIKE ?';
+        $params[] = '%' . $category . '%';
+    }
+    $sql .= ' ORDER BY p.id';
+
+    $products = run($sql, $params)->fetchAll();
+    foreach ($products as $i => $p) {
+        $products[$i]['qty'] = (int)$p['qty'];
+        $products[$i]['price'] = (float)$p['price'];
+        $products[$i]['low'] = $products[$i]['qty'] < LOW_STOCK;
+    }
+    reply(true, 'OK', ['products' => $products]);
+}
 
 if ($action === 'product_save') {
-    $products = load('products');
-    $name = trim($input['name'] ?? '');
-    $loc = trim($input['location'] ?? '');
-    if (!vText($name, 100)) reply(false, 'Nosaukums: 1-100 simboli.');
-    if (!vInt($input['qty'] ?? '', 0, 1000000)) reply(false, 'Daudzums: 0-1 000 000.');
-    if (!vLoc($loc)) reply(false, 'Atrašanās vieta: līdz 30 simboliem (burti, cipari, - /).');
-    $qty = (int)$input['qty'];
     $id = (int)($input['id'] ?? 0);
-    if ($id) {
-        $found = false;
-        foreach ($products as &$p) if ($p['id'] === $id) { $p['name'] = $name; $p['qty'] = $qty; $p['location'] = $loc; $found = true; }
-        unset($p);
-        if (!$found) reply(false, 'Produkts nav atrasts!');
-    } else {
-        $products[] = ['id' => nextId($products), 'name' => $name, 'qty' => $qty, 'location' => $loc, 'condition' => 'Labā'];
+    $name = trim($input['name'] ?? '');
+    $category = trim($input['category'] ?? '');
+    $code = trim($input['code'] ?? '');
+    $location = trim($input['location'] ?? '');
+    $supplierId = (int)($input['supplier_id'] ?? 0);
+    if ($supplierId === 0) {
+        $supplierId = null; // nav piegadataja
     }
-    store('products', $products);
+
+    if (!okText($name, 100)) {
+        reply(false, 'Nosaukums: 1-100 simboli.');
+    }
+    if (!okCode($code)) {
+        reply(false, 'Preces kods: 2-30 simboli (burti, cipari, - vai _).');
+    }
+    if ($category !== '' && !okText($category, 50)) {
+        reply(false, 'Kategorija: līdz 50 simboliem.');
+    }
+    if (!okPrice($input['price'] ?? '')) {
+        reply(false, 'Cena: 0-1 000 000.');
+    }
+    if (!okInt($input['qty'] ?? '', 0, 1000000)) {
+        reply(false, 'Daudzums: 0-1 000 000.');
+    }
+    if (!okLocation($location)) {
+        reply(false, 'Atrašanās vieta: līdz 30 simboliem (burti, cipari, - /).');
+    }
+
+    $price = round((float)$input['price'], 2);
+    $qty = (int)$input['qty'];
+
+    // vai tads kods jau ir citai precei
+    $sameCode = run('SELECT id FROM products WHERE code = ? AND id <> ?', [$code, $id])->fetch();
+    if ($sameCode) {
+        reply(false, 'Šāds preces kods jau eksistē!');
+    }
+
+    if ($id) {
+        // labo esosu preci
+        $found = run('SELECT id FROM products WHERE id = ?', [$id])->fetch();
+        if (!$found) {
+            reply(false, 'Produkts nav atrasts!');
+        }
+        run('UPDATE products SET code=?, name=?, category=?, price=?, qty=?, location=?, supplier_id=? WHERE id=?',
+            [$code, $name, $category, $price, $qty, $location, $supplierId, $id]);
+    } else {
+        // jauna prece
+        run('INSERT INTO products (code, name, category, price, qty, location, supplier_id) VALUES (?,?,?,?,?,?,?)',
+            [$code, $name, $category, $price, $qty, $location, $supplierId]);
+    }
     reply(true, 'Produkts saglabāts!');
 }
 
 if ($action === 'product_delete') {
     $id = (int)($input['id'] ?? 0);
-    store('products', array_filter(load('products'), fn($p) => $p['id'] !== $id));
+    run('DELETE FROM products WHERE id = ?', [$id]);
     reply(true, 'Produkts dzēsts!');
 }
 
-if ($action === 'orders_list') reply(true, 'OK', ['orders' => load('orders'), 'statuses' => STATUSES]);
+// jauna piegade - palielina atlikumu
+if ($action === 'product_receive') {
+    $id = (int)($input['id'] ?? 0);
+    if (!okInt($input['qty'] ?? '', 1, 1000000)) {
+        reply(false, 'Daudzums: 1-1 000 000.');
+    }
+    $qty = (int)$input['qty'];
+
+    $product = run('SELECT * FROM products WHERE id = ?', [$id])->fetch();
+    if (!$product) {
+        reply(false, 'Produkts nav atrasts!');
+    }
+
+    run('UPDATE products SET qty = qty + ? WHERE id = ?', [$qty, $id]);
+    addLog($id, $product['name'], 'piegāde', $qty, '', $product['location']);
+    reply(true, 'Piegāde reģistrēta, atlikums palielināts!');
+}
+
+
+// ---------- pasutijumi (worker) ----------
+
+if ($action === 'orders_list') {
+    $orders = $pdo->query('SELECT * FROM orders ORDER BY id DESC')->fetchAll();
+    reply(true, 'OK', ['orders' => $orders, 'statuses' => STATUSES]);
+}
 
 if ($action === 'order_save') {
-    $orders = load('orders');
-    $products = load('products');
     $client = trim($input['client'] ?? '');
-    if (!vText($client, 100)) reply(false, 'Klients: 1-100 simboli.');
-    if (!vInt($input['qty'] ?? '', 1, 10000)) reply(false, 'Daudzums: 1-10 000.');
-    $qty = (int)$input['qty'];
-    $pid = (int)($input['product_id'] ?? 0);
-    foreach ($products as &$p) {
-        if ($p['id'] !== $pid) continue;
-        if ($p['qty'] < $qty) reply(false, 'Noliktavā nepietiek preču!');
-        $p['qty'] -= $qty;
-        $orders[] = ['id' => nextId($orders), 'product_id' => $pid, 'product' => $p['name'], 'qty' => $qty,
-                     'client' => $client, 'status' => 'Jauns', 'date' => date('Y-m-d H:i')];
-        store('products', $products);
-        store('orders', $orders);
-        reply(true, 'Pasūtījums izveidots!');
+    $productId = (int)($input['product_id'] ?? 0);
+
+    if (!okText($client, 100)) {
+        reply(false, 'Klients: 1-100 simboli.');
     }
-    reply(false, 'Produkts nav atrasts!');
+    if (!okInt($input['qty'] ?? '', 1, 10000)) {
+        reply(false, 'Daudzums: 1-10 000.');
+    }
+    $qty = (int)$input['qty'];
+
+    $product = run('SELECT * FROM products WHERE id = ?', [$productId])->fetch();
+    if (!$product) {
+        reply(false, 'Produkts nav atrasts!');
+    }
+    if ((int)$product['qty'] < $qty) {
+        reply(false, 'Noliktavā nepietiek preču!');
+    }
+
+    // atlikuma samazinasana un pasutijuma izveide jadara kopa
+    $pdo->beginTransaction();
+    run('UPDATE products SET qty = qty - ? WHERE id = ?', [$qty, $productId]);
+    run('INSERT INTO orders (product_id, product, qty, client, status, created_at) VALUES (?,?,?,?,?,?)',
+        [$productId, $product['name'], $qty, $client, 'Jauns', date('Y-m-d H:i:s')]);
+    addLog($productId, $product['name'], 'izsniegšana', -$qty, $product['location'], '');
+    $pdo->commit();
+
+    reply(true, 'Pasūtījums izveidots!');
 }
 
 if ($action === 'order_status') {
-    $orders = load('orders');
     $id = (int)($input['id'] ?? 0);
-    if (!in_array($input['status'] ?? '', STATUSES, true)) reply(false, 'Nederīgs statuss!');
-    foreach ($orders as &$o) if ($o['id'] === $id) $o['status'] = $input['status'];
-    store('orders', $orders);
+    $status = $input['status'] ?? '';
+    if (!in_array($status, STATUSES, true)) {
+        reply(false, 'Nederīgs statuss!');
+    }
+    run('UPDATE orders SET status = ? WHERE id = ?', [$status, $id]);
     reply(true, 'Statuss nomainīts!');
 }
 
 if ($action === 'order_delete') {
     $id = (int)($input['id'] ?? 0);
-    store('orders', array_filter(load('orders'), fn($o) => $o['id'] !== $id));
+    run('DELETE FROM orders WHERE id = ?', [$id]);
     reply(true, 'Pasūtījums dzēsts!');
 }
 
+
+// ---------- preču izvietosana (sorter) ----------
+
 if ($action === 'place') {
-    $products = load('products');
-    $log = load('log');
-    $loc = trim($input['location'] ?? '');
-    if ($loc === '' || !vLoc($loc)) reply(false, 'Atrašanās vieta: 1-30 simboli (burti, cipari, - /).');
     $id = (int)($input['id'] ?? 0);
-    foreach ($products as &$p) {
-        if ($p['id'] !== $id) continue;
-        $cond = $input['condition'] ?? ($p['condition'] ?? 'Labā');
-        if (!in_array($cond, CONDITIONS, true)) reply(false, 'Nederīgs stāvoklis!');
-        $log[] = ['date' => date('Y-m-d H:i'), 'product' => $p['name'], 'from' => $p['location'], 'to' => $loc,
-                  'cond' => $cond, 'by' => $me];
-        $p['location'] = $loc;
-        $p['condition'] = $cond;
-        store('products', $products);
-        store('log', $log);
-        reply(true, 'Izvietojums saglabāts!');
+    $location = trim($input['location'] ?? '');
+
+    if ($location === '' || !okLocation($location)) {
+        reply(false, 'Atrašanās vieta: 1-30 simboli (burti, cipari, - /).');
     }
-    reply(false, 'Produkts nav atrasts!');
+
+    $product = run('SELECT * FROM products WHERE id = ?', [$id])->fetch();
+    if (!$product) {
+        reply(false, 'Produkts nav atrasts!');
+    }
+
+    run('UPDATE products SET location = ? WHERE id = ?', [$location, $id]);
+    addLog($id, $product['name'], 'pārvietošana', 0, $product['location'], $location);
+    reply(true, 'Izvietojums saglabāts!');
 }
 
-if ($action === 'log_list') {
-    reply(true, 'OK', ['log' => array_slice(array_reverse(load('log')), 0, 200), 'conditions' => CONDITIONS]);
-}
+
+// ---------- parskats ----------
 
 if ($action === 'report') {
-    $products = load('products');
-    $byStatus = [];
-    foreach (load('orders') as $o) $byStatus[$o['status']] = ($byStatus[$o['status']] ?? 0) + 1;
-    $byLoc = [];
-    $conds = [];
+    $products = $pdo->query('SELECT * FROM products')->fetchAll();
+
+    $totalQty = 0;
+    $totalValue = 0.0;
+    $lowStock = [];
+    $noPlace = [];
     foreach ($products as $p) {
-        $k = $p['location'] === '' ? '(nav norādīta)' : $p['location'];
-        $byLoc[$k] = ($byLoc[$k] ?? 0) + $p['qty'];
-        $c = $p['condition'] ?? 'Labā';
-        $conds[$c] = ($conds[$c] ?? 0) + 1;
+        $totalQty += (int)$p['qty'];
+        $totalValue += (float)$p['qty'] * (float)$p['price'];
+        if ((int)$p['qty'] < LOW_STOCK) {
+            $lowStock[] = $p;
+        }
+        if ($p['location'] === '') {
+            $noPlace[] = $p;
+        }
     }
+
+    // cik pasutijumu katra statusa
+    $ordersByStatus = [];
+    $rows = $pdo->query('SELECT status, COUNT(*) AS c FROM orders GROUP BY status')->fetchAll();
+    foreach ($rows as $row) {
+        $ordersByStatus[$row['status']] = (int)$row['c'];
+    }
+
+    $log = $pdo->query('SELECT * FROM stock_log ORDER BY id DESC LIMIT 10')->fetchAll();
+
     reply(true, 'OK', [
-        'by_location' => (object)$byLoc, 'conditions' => (object)$conds,
-        'date' => date('Y-m-d H:i'), 'products' => $products, 'total_qty' => array_sum(array_column($products, 'qty')),
-        'low_stock' => array_values(array_filter($products, fn($p) => $p['qty'] < 5)),
-        'no_place' => array_values(array_filter($products, fn($p) => $p['location'] === '')),
-        'orders' => $byStatus, 'log' => array_slice(array_reverse(load('log')), 0, 10),
+        'date' => date('Y-m-d H:i'),
+        'products' => $products,
+        'total_qty' => $totalQty,
+        'total_value' => round($totalValue, 2),
+        'low_stock' => $lowStock,
+        'no_place' => $noPlace,
+        'orders' => $ordersByStatus,
+        'log' => $log,
     ]);
 }
+
+reply(false, 'Nezināma darbība.', [], 404);

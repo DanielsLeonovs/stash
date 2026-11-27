@@ -28,7 +28,7 @@ body {
     left: 0;
     width: 15%;
     height: 100vh;
-    background-color: #28629b;
+    background-color: #2e3b2f;
     color: white;
     padding: 10px;
     overflow-y: auto;
@@ -57,7 +57,7 @@ body {
 }
 
 #menu a:hover {
-    color: #b9dcff;
+    color: #9bbf9d;
 }
 
 #menu span {
@@ -78,7 +78,7 @@ input, select, button {
 }
 
 button {
-    background: #28629b;
+    background: #3a6b5c;
     color: white;
     border: 0;
     cursor: pointer;
@@ -94,6 +94,10 @@ th, td {
     border: 1px solid #ccc;
     padding: 6px;
     text-align: left;
+}
+
+tr.low {
+    background: #fff3cd;
 }
 
 @media (max-width: 768px) {

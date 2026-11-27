@@ -23,7 +23,6 @@ h1 {
 .box {
     background: #fff;
     border: 1px solid #ddd;
-    border-radius: 6px;
     padding: 20px;
     margin-bottom: 20px;
 }
@@ -49,30 +48,28 @@ select {
     width: 100%;
     padding: 10px;
     border: 1px solid #bbb;
-    border-radius: 4px;
     font-size: 15px;
     background: #fff;
 }
 
 input:focus,
 select:focus {
-    outline: 2px solid #2b6cb0;
-    border-color: #2b6cb0;
+    outline: 2px solid #3a6b5c;
+    border-color: #3a6b5c;
 }
 
 button {
     margin-top: 14px;
     padding: 10px;
     border: 0;
-    border-radius: 4px;
-    background: #2b6cb0;
+    background: #3a6b5c;
     color: #fff;
     font-size: 15px;
     cursor: pointer;
 }
 
 button:hover {
-    background: #245a94;
+    background: #2d5347;
 }
 
 .message {
